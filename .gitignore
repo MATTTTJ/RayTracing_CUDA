@@ -1,0 +1,25 @@
+# Visual Studio workspace and user settings
+.vs/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+# Build output and intermediate files
+x64/
+[Dd]ebug/
+[Rr]elease/
+*.exe
+*.dll
+*.obj
+*.pdb
+*.ilk
+*.tlog
+*.log
+*.cache
+*.deps
+*.recipe
+
+# Generated ray-tracing images
+*.ppm
+
