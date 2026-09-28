@@ -8,6 +8,7 @@
 
 #include <iostream>
 #include <stdio.h>
+#include <cmath>
 
 cudaError_t addWithCuda(int *c, const int *a, const int *b, unsigned int size);
 
@@ -17,7 +18,7 @@ __global__ void addKernel(int *c, const int *a, const int *b)
     c[i] = a[i] + b[i];
 }
 
-bool HitSphere(const Point3& center, double radius, const Ray& r)
+double HitSphere(const Point3& center, double radius, const Ray& r)
 {
     // 광선 출발점에서 구 중심으로 향하는 벡터
     Vec3 oc = center - r.Origin();
@@ -30,25 +31,41 @@ bool HitSphere(const Point3& center, double radius, const Ray& r)
     // 판별식이 0 이상이면 실수 t가 존재하므로 구와 만난다.
     auto discriminant = b * b - 4 * a * c;
 
-    return discriminant >= 0;
+	// 실수 해가 없으면 구와 만나지 않는다.
+	if (discriminant < 0.0)
+	{
+		return -1.0;
+	}
+	// 두 교차점 중 카메라에 더 가까운 쪽의 t를 반환한다.
+	return (-b - std::sqrt(discriminant)) / (2.0 * a);
 }
 
 Color RayColor(const Ray& r)
 {
-    // 중심이 (0, 0, -1)이고 반지름이 0.5인 구와 광선이 만나면 빨간색을 반환한다.
-    if (HitSphere(Point3(0, 0, -1), 0.5, r))
-    {
-        return Color(1, 0, 0);
-    }
+	const Point3 sphereCenter(0, 0, -1);
 
-    // 구와 만나지 않으면 기존 하늘 배경을 그린다. 
+	auto t = HitSphere(sphereCenter, 0.5, r);
 
-    // 정규화
-    Vec3 unitDirection = UnitVector(r.Direction());
-    // Y 범위 -1~1을 색 혼합에 사용할 수 있는 0~1로 변경
-    auto a = 0.5 * (unitDirection.Y() + 1.0);
+	if (t>0.0)
+	{
+		// 광선 위의 실제 교차점
+		Point3 hitPoint = r.At(t);
 
-    // 흰색의 비율 + 파란색의 비율
+		// 구 중심에서 교차점으로 향하는 바깥쪽 단위 법선
+		Vec3 outwardNormal = UnitVector(hitPoint - sphereCenter);
+
+		// 법선 범위 -1~1을 색상 범위 0~1로 변환한다.
+		return 0.5 * Color(
+			outwardNormal.X() + 1.0,
+			outwardNormal.Y() + 1.0,
+			outwardNormal.Z() + 1.0
+		);
+	}
+
+	// 구와 만나지 않으면 기존 하늘 배경을 그린다. 
+	Vec3 unitDirection = UnitVector(r.Direction());
+	auto a = 0.5 * (unitDirection.Y() + 1.0);
+
     return (1.0 - a) * Color(1.0, 1.0, 1.0) + a * Color(0.5, 0.7, 1.0);
 }
 
