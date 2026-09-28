@@ -2,13 +2,13 @@
 #include "cuda_runtime.h"
 #include "device_launch_parameters.h"
 
-#include "Color.h"
-#include "Vec3.h"
-#include "Ray.h"
+#include "RTWeekend.h"
+#include "Interval.h"
+#include "Hittable.h"
+#include "HittableList.h"
+#include "Sphere.h"
 
-#include <iostream>
 #include <stdio.h>
-#include <cmath>
 
 cudaError_t addWithCuda(int *c, const int *a, const int *b, unsigned int size);
 
@@ -18,92 +18,41 @@ __global__ void addKernel(int *c, const int *a, const int *b)
     c[i] = a[i] + b[i];
 }
 
-double HitSphere(const Point3& center, double radius, const Ray& r)
+Color RayColor(const Ray& ray, const Hittable& world)
 {
-    // 광선 출발점에서 구 중심으로 향하는 벡터
-    Vec3 oc = center - r.Origin();
+    HitRecord hitRecord;
 
-    // 광선-구 교차식을 이차방정식으로 정리한 계수
-    auto a = Dot(r.Direction(), r.Direction());
-    auto b = -2.0 * Dot(r.Direction(), oc);
-    auto c = Dot(oc, oc) - radius * radius;
+    // 카메라 앞쪽의 모든 교차점을 허용한다. 
+    if (world.Hit(ray, Interval(0.0, Infinity), hitRecord))
+    {
+        // 저장된 법선을 RGB 범위로 변환한다.
+        return 0.5 * (hitRecord.Normal + Color(1.0, 1.0, 1.0));
+    }
 
-    // 판별식이 0 이상이면 실수 t가 존재하므로 구와 만난다.
-    auto discriminant = b * b - 4 * a * c;
-
-	// 실수 해가 없으면 구와 만나지 않는다.
-	if (discriminant < 0.0)
-	{
-		return -1.0;
-	}
-	// 두 교차점 중 카메라에 더 가까운 쪽의 t를 반환한다.
-	return (-b - std::sqrt(discriminant)) / (2.0 * a);
-}
-
-Color RayColor(const Ray& r)
-{
-	const Point3 sphereCenter(0, 0, -1);
-
-	auto t = HitSphere(sphereCenter, 0.5, r);
-
-	if (t>0.0)
-	{
-		// 광선 위의 실제 교차점
-		Point3 hitPoint = r.At(t);
-
-		// 구 중심에서 교차점으로 향하는 바깥쪽 단위 법선
-		Vec3 outwardNormal = UnitVector(hitPoint - sphereCenter);
-
-		// 법선 범위 -1~1을 색상 범위 0~1로 변환한다.
-		return 0.5 * Color(
-			outwardNormal.X() + 1.0,
-			outwardNormal.Y() + 1.0,
-			outwardNormal.Z() + 1.0
-		);
-	}
-
-	// 구와 만나지 않으면 기존 하늘 배경을 그린다. 
-	Vec3 unitDirection = UnitVector(r.Direction());
-	auto a = 0.5 * (unitDirection.Y() + 1.0);
+    // 아무 물체와도 만나지 않으면 하늘 배경으로 반환한다.
+    Vec3 unitDirection = UnitVector(ray.Direction());
+    auto a = 0.5 * (unitDirection.Y() + 1.0);
 
     return (1.0 - a) * Color(1.0, 1.0, 1.0) + a * Color(0.5, 0.7, 1.0);
 }
 
 int main()
 {
-    //const int arraySize = 5;
-    //const int a[arraySize] = { 1, 2, 3, 4, 5 };
-    //const int b[arraySize] = { 10, 20, 30, 40, 50 };
-    //int c[arraySize] = { 0 };
-
-    //// Add vectors in parallel.
-    //cudaError_t cudaStatus = addWithCuda(c, a, b, arraySize);
-    //if (cudaStatus != cudaSuccess) {
-    //    fprintf(stderr, "addWithCuda failed!");
-    //    return 1;
-    //}
-
-    //printf("{1,2,3,4,5} + {10,20,30,40,50} = {%d,%d,%d,%d,%d}\n",
-    //    c[0], c[1], c[2], c[3], c[4]);
-
-    //// cudaDeviceReset must be called before exiting in order for profiling and
-    //// tracing tools such as Nsight and Visual Profiler to show complete traces.
-    //cudaStatus = cudaDeviceReset();
-    //if (cudaStatus != cudaSuccess) {
-    //    fprintf(stderr, "cudaDeviceReset failed!");
-    //    return 1;
-    //}
-
-    // Image
-    //int ImageWidth = 256;
-    //int ImageHeight = 256;
-
     auto aspectRatio = 16.0 / 9.0;
     int imageWidth = 400;
 
     // 높이 계산, 최소 1 이상
     int imageHeight = int(imageWidth / aspectRatio);
     imageHeight = (imageHeight < 1) ? 1 : imageHeight;
+
+    // World
+    HittableList world;
+
+    // 화면 중앙의 작은 구
+    world.Add(std::make_shared<Sphere>(Point3(0.0, 0.0, -1.0), 0.5));
+    
+    // 바닥처럼 보이는 매우 큰 구
+    world.Add(std::make_shared<Sphere>(Point3(0.0, -100.5, -1.0), 100.0));
 
     // 뷰포트 계산
     auto viewportHeight = 2.0;
@@ -148,7 +97,7 @@ int main()
             Ray r(cameraCenter, rayDirection);
 
             // 광선 방향에서 보이는 색상 계산
-            Color pixelColor = RayColor(r);
+            Color pixelColor = RayColor(r, world);
             WriteColor(std::cout, pixelColor);
 
             /*auto PixelColor = Color(double(i) / (imageWidth - 1), double(j) / (imageHeight - 1), 0);
