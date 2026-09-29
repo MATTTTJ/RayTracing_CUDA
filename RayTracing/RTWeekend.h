@@ -3,6 +3,7 @@
 #define RTWEEKEND_H
 
 #include <cmath>
+#include <cstdlib>
 #include <iostream>
 #include <limits>
 #include <memory>
@@ -18,6 +19,18 @@ constexpr double Pi = 3.1415926535897932385;
 inline double DegreesToRadians(double degree)
 {
 	return degree * Pi / 180.0;
+}
+
+inline double RandomDouble()
+{
+	// 0 이상, 1 미만의 무작위 실수를 반환한다. 
+	return std::rand() / (RAND_MAX + 1.0);
+}
+
+inline double RandomDouble(double minimum, double maximum)
+{
+	// minimum 이상, maximum 미만의 무작위 실수를 반환한다.
+	return minimum + (maximum - minimum) * RandomDouble();
 }
 
 // 공통 프로젝트 헤더
